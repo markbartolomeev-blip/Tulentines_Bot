@@ -1,26 +1,26 @@
 import asyncio
 import random
 from datetime import datetime, timezone, timedelta
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
+# Вставь сюда токен своего бота
 TOKEN = "8483249261:AAF2GFIHmJ2uBXvXgeYR_nDf1JJ-SuE_7LI"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+# Словарь: user_id → текст письма
 letters = {}
 
+# Саратовское время (UTC+4)
 SARATOV_TZ = timezone(timedelta(hours=4))
 SEND_TIME = datetime(2026, 2, 14, 0, 0, 0, tzinfo=SARATOV_TZ)
 
 sent = False
 
-
 def now_saratov():
     return datetime.now(SARATOV_TZ)
-
 
 def is_before_send_time():
     return now_saratov() < SEND_TIME
@@ -28,50 +28,59 @@ def is_before_send_time():
 
 @dp.message(Command("start"))
 async def start(msg: types.Message):
-    await msg.answer(
-        "Привет! 💘\n"
-        "Это бот анонимных валентинок.\n\n"
-        "Ты можешь отправить только 1 валентинку.\n"
-        "14 февраля в 00:00 по Саратову она будет отправлена случайному человеку 💌\n\n"
-        "Команды:\n"
-        "/send — написать валентинку 💝\n"
-        "/check — статус"
+    text = (
+        "💖 Добро пожаловать в Tulentine’s Box! 💕\n\n"
+        "Здесь ты можешь отправить анонимное послание, и оно достанется случайному человеку из группы, "
+        "кто тоже написал сообщение! 💌\n\n"
+        "Будь вежлив, пиши только искренние и добрые слова! "
+        "Не нужно писать конкретному человеку, так как шанс того, что оно попадет именно ему мал! 💘\n\n"
+        "/send — написать послание 💝\n"
+        "/check — посмотреть статус письма 💟"
     )
+    await msg.answer(text)
 
 
 @dp.message(Command("send"))
 async def send(msg: types.Message):
+    if msg.chat.type != "private":
+        await msg.answer("💌 Напиши мне в личные сообщения, чтобы отправить послание 😉")
+        return
+
     if not is_before_send_time():
-        await msg.answer("⛔ Приём валентинок уже закрыт.")
+        await msg.answer("⛔ Приём посланий уже закрыт.")
         return
     if msg.from_user.id in letters:
-        await msg.answer("💔 Ты уже отправил валентинку.")
+        await msg.answer("💔 Ты уже отправил письмо. Второе отправить нельзя.")
         return
-    await msg.answer("Напиши свою валентинку 💌")
+
+    await msg.answer("✍️ Пиши своё послание, и оно отправится в ящик Tulentine’s!")
 
 
-@dp.message()
+@dp.message(lambda msg: msg.text and not msg.text.startswith("/"))
 async def save_letter(msg: types.Message):
-    if msg.text.startswith("/"):
-        return
-
     if not is_before_send_time():
-        await msg.answer("⛔ Валентинки больше не принимаются.")
+        await msg.answer("⛔ Послания больше не принимаются.")
         return
     if msg.from_user.id in letters:
-        await msg.answer("💔 Ты уже отправил валентинку.")
+        await msg.answer("💔 Ты уже отправил письмо.")
         return
 
     letters[msg.from_user.id] = msg.text
-    await msg.answer("💖 Валентинка сохранена! Жди 14 февраля 🎁")
+    await msg.answer("💖 Твоё письмо сохранено! Жди 14 февраля 🎁")
 
 
 @dp.message(Command("check"))
 async def check(msg: types.Message):
     if msg.from_user.id in letters:
-        await msg.answer("💘 Твоя валентинка сохранена.")
+        await msg.answer(
+            "💌 Твоё письмо сохранено!\n"
+            "14 февраля оно попадёт в руки случайному человеку! ☺️"
+        )
     else:
-        await msg.answer("Ты ещё не написал валентинку 😢")
+        await msg.answer(
+            "❗ Твоё письмо не отправлено.\n"
+            "Отправляй через команду /send 🤩"
+        )
 
 
 async def send_valentines():
@@ -82,20 +91,28 @@ async def send_valentines():
             texts = list(letters.values())
 
             shuffled = texts.copy()
+
+            # Защита: письмо не может попасть самому себе
             while True:
                 random.shuffle(shuffled)
-                if all(texts[i] != shuffled[i] for i in range(len(texts))):
+                ok = True
+                for i in range(len(texts)):
+                    if texts[i] == shuffled[i]:
+                        ok = False
+                        break
+                if ok:
                     break
 
+            # Рассылаем письма
             for i, user_id in enumerate(users):
                 await bot.send_message(
                     user_id,
-                    "💌 Тебе пришла валентинка:\n\n" + shuffled[i]
+                    "💌 Тебе пришло послание из Tulentine’s Box:\n\n" + shuffled[i]
                 )
 
             sent = True
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
 
 
 async def main():
@@ -103,5 +120,5 @@ async def main():
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
+if name == "__main__":
     asyncio.run(main())
