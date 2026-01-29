@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # Вставь сюда токен своего бота
-TOKEN = "8483249261:AAF2GFIHmJ2uBXvXgeYR_nDf1JJ-SuE_7LI"
+TOKEN = "ВСТАВЬ_СЮДА_ТОКЕН"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -120,5 +120,5 @@ async def main():
     await dp.start_polling(bot)
 
 
-if name == "__main__":
+if __name__ == "__main__":
     asyncio.run(main())
