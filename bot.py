@@ -23,7 +23,7 @@ SHOWS_PRIORITY = [
 ]
 
 SARATOV_TZ = timezone(timedelta(hours=4))
-DRAW_TIME = datetime(2026, 2, 7, 14, 30, tzinfo=SARATOV_TZ)
+DRAW_TIME = datetime(2026, 2, 9, 12, 0, tzinfo=SARATOV_TZ)
 
 # ----------------- /start -----------------
 @dp.message(Command("start"))
@@ -40,7 +40,7 @@ async def start(message: Message):
         "partner": None
     }
     await message.answer(
-        "🎬 Ты зарегистрирован! Жди жеребьёвку 7 февраля в 14:13 💘"
+        "🎬 Ты зарегистрирован! Жди жеребьёвку 9 февраля в 12:00 💘"
     )
 
 # ----------------- /list (админ) -----------------
