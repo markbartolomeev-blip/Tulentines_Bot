@@ -22,7 +22,7 @@ SHOWS_PRIORITY = [
 ]
 
 SARATOV_TZ = timezone(timedelta(hours=4))
-DRAW_TIME = datetime(2026, 2, 9, 12, 0, tzinfo=SARATOV_TZ)
+DRAW_TIME = datetime(2026, 2, 4, 14, 13, tzinfo=SARATOV_TZ)
 
 
 @dp.message(Command("start"))
