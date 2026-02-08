@@ -6,15 +6,10 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
 
-# ----------------- НАСТРОЙКИ -----------------
+# ====== НАСТРОЙКИ ======
+
 TOKEN = "8483249261:AAF2GFIHmJ2uBXvXgeYR_nDf1JJ-SuE_7LI"
 ADMIN_ID = 1221509369
-
-bot = Bot(TOKEN)
-dp = Dispatcher()
-
-participants = {}  # user_id -> {"username":..., "role":..., "show":..., "partner":...}
-draw_done = False
 
 SHOWS_PRIORITY = [
     "Холостяк",
@@ -22,113 +17,175 @@ SHOWS_PRIORITY = [
     "Давай поженимся"
 ]
 
-SARATOV_TZ = timezone(timedelta(hours=4))
-DRAW_TIME = datetime(2026, 2, 9, 12, 0, tzinfo=SARATOV_TZ)
+DRAW_TIME = datetime(
+    2026, 2, 9, 12, 0,
+    tzinfo=timezone(timedelta(hours=3))
+)
 
-# ----------------- /start -----------------
+# ====== ПЕРЕМЕННЫЕ ======
+
+participants = {}
+draw_done = False
+
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
+
+# ====== /start ======
+
 @dp.message(Command("start"))
 async def start(message: Message):
     user_id = message.from_user.id
-    if user_id in participants:
-        await message.answer("Ты уже зарегистрирован 😉")
-        return
 
-    participants[user_id] = {
-        "username": message.from_user.username or "без_юзернейма",
-        "role": None,
-        "show": None,
-        "partner": None
-    }
-    await message.answer(
-        "🎬 Ты зарегистрирован! Жди жеребьёвку 9 февраля в 12:00 💘"
-    )
+    if user_id not in participants:
+        participants[user_id] = {
+            "username": message.from_user.username or f"id{user_id}",
+            "show": None,
+            "role": None,
+            "partner": []
+        }
 
-# ----------------- /list (админ) -----------------
+        await bot.send_message(
+            ADMIN_ID,
+            "➕ Новая регистрация\n\n"
+            f"👤 @{participants[user_id]['username']}\n"
+            f"🆔 {user_id}\n"
+            f"📊 Всего участников: {len(participants)}"
+        )
+
+        await message.answer(
+            "💘 Ты зарегистрирован(а)!\n"
+            "Ожидай жеребьёвку 💌"
+        )
+    else:
+        await message.answer(
+            "💗 Ты уже зарегистрирован(а)\n"
+            "Ожидай жеребьёвку 💌"
+        )
+
+# ====== /list — очередь ======
+
 @dp.message(Command("list"))
-async def list_players(message: Message):
+async def list_queue(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
-    text = "📋 Участники (без Тайных Любовников):\n\n"
-    for data in participants.values():
-        if data["role"] == "Обычный участник":
-            text += f"@{data['username']} — {data['show']}\n"
-    await message.answer(text or "Пока данных нет")
 
-# ----------------- Жеребьёвка -----------------
+    if not participants:
+        await message.answer("Очередь пуста")
+        return
+
+    text = f"📋 Очередь участников ({len(participants)}):\n\n"
+    for i, data in enumerate(participants.values(), start=1):
+        text += f"{i}. @{data['username']}\n"
+
+    await message.answer(text)
+
+# ====== /list_role — роли ======
+
+@dp.message(Command("list_role"))
+async def list_roles(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    if not draw_done:
+        await message.answer("⏳ Жеребьёвка ещё не проведена")
+        return
+
+    text = "🎭 Роли участников:\n\n"
+    for data in participants.values():
+        text += f"@{data['username']} — {data['show']} — {data['role']}\n"
+
+    await message.answer(text)
+
+# ====== ЖЕРЕБЬЁВКА ======
+
 async def draw_lottery():
     global draw_done
+
     if draw_done:
         return
 
     users = list(participants.keys())
     count = len(users)
 
-    if count < 7:
+    if count < 6:
         for uid in users:
-            await bot.send_message(uid, "😔 К сожалению, для твоего шоу не хватило участников, сожалеем")
+            await bot.send_message(
+                uid,
+                "😔 К сожалению, для твоего шоу не хватило участников, сожалеем"
+            )
         draw_done = True
         return
 
     random.shuffle(users)
 
-    # Определяем какие шоу использовать
     if count >= 9:
         shows = SHOWS_PRIORITY
+        group_size = 3
     elif count == 8:
         shows = SHOWS_PRIORITY
-    else:  # 7 человек
+        group_size = 2
+    elif count == 7:
         shows = SHOWS_PRIORITY[:2]
+        group_size = 2
+    else:  # 6
+        shows = SHOWS_PRIORITY[:2]
+        group_size = 3
 
     index = 0
+
     for show in shows:
-        if index + 2 > count:
-            break
+        group = users[index:index + group_size]
+        index += group_size
 
-        pair = users[index:index + 2]
-        index += 2
+        if len(group) < group_size:
+            continue
 
-        lover = random.choice(pair)
-        normal = pair[0] if pair[1] == lover else pair[1]
+        secret = random.choice(group)
 
-        participants[lover]["role"] = "Тайный Любовник"
-        participants[lover]["show"] = show
+        for uid in group:
+            participants[uid]["show"] = show
+            if uid == secret:
+                participants[uid]["role"] = "Тайный Любовник"
+            else:
+                participants[uid]["role"] = "Обычный участник"
+                participants[uid]["partner"] = [
+                    participants[x]["username"] for x in group if x != uid
+                ]
 
-        participants[normal]["role"] = "Обычный участник"
-        participants[normal]["show"] = show
-        participants[normal]["partner"] = lover
+    # ====== РАССЫЛКА ======
 
-    # Отправка сообщений участникам
     for uid, data in participants.items():
         if data["role"] == "Тайный Любовник":
             await bot.send_message(
                 uid,
                 f"🎉 Поздравляем, ты попал в шоу «{data['show']}»!\n"
                 f"💗 Твоя роль — Тайный Любовник\n"
-                f"💌 Твоя задача: хранить тайну и подготовить 2 подарка общей суммой до 200₽"
+                f"💌 Храни тайну и подготовь 2 подарка до 200₽"
             )
         elif data["role"] == "Обычный участник":
-            partner_username = participants[data["partner"]]["username"]
+            partners = ", ".join("@" + p for p in data["partner"])
             await bot.send_message(
                 uid,
                 f"🎉 Поздравляем, ты попал в шоу «{data['show']}»!\n"
                 f"💗 Твоя роль — Обычный участник\n"
-                f"😍 Твой напарник/напарница — @{partner_username}\n"
-                f"💌 Твоя задача: вместе вычислить Тайного Любовника"
+                f"😍 Твои напарники: {partners}\n"
+                f"💌 Вычисли Тайного Любовника"
             )
 
     draw_done = True
 
-# ----------------- Смотрим время жеребьёвки -----------------
-async def scheduler():
-    now = datetime.now(SARATOV_TZ)
-    delay = (DRAW_TIME - now).total_seconds()
-    if delay > 0:
-        print(f"Ждём жеребьёвку {delay} секунд...")
-        await asyncio.sleep(delay)
-    print("Запускаем жеребьёвку!")
-    await draw_lottery()
+# ====== ТАЙМЕР ======
 
-# ----------------- Запуск бота -----------------
+async def scheduler():
+    while not draw_done:
+        now = datetime.now(timezone(timedelta(hours=3)))
+        if now >= DRAW_TIME:
+            await draw_lottery()
+            break
+        await asyncio.sleep(30)
+
+# ====== ЗАПУСК ======
+
 async def main():
     asyncio.create_task(scheduler())
     await dp.start_polling(bot)
